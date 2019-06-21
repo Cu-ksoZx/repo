@@ -17,8 +17,6 @@ import os
 import optparse
 import sys
 
-import manifest_loader
-
 from error import NoSuchProjectError
 
 class Command(object):
@@ -26,6 +24,7 @@ class Command(object):
   """
 
   common = False
+  manifest = None
   _optparse = None
 
   def WantPager(self, opt):
@@ -58,25 +57,10 @@ class Command(object):
     """
     raise NotImplementedError
  
-  @property
-  def manifest(self):
-    return self.GetManifest()
-
-  def GetManifest(self, reparse=False, type=None):
-    return manifest_loader.GetManifest(self.repodir,
-                                       reparse=reparse,
-                                       type=type)
-
   def GetProjects(self, args, missing_ok=False):
     """A list of projects that match the arguments.
     """
     all = self.manifest.projects
-
-    mp = self.manifest.manifestProject
-    if mp.relpath == '.':
-      all = dict(all)
-      all[mp.name] = mp
-
     result = []
 
     if not args:
@@ -97,9 +81,7 @@ class Command(object):
             for p in all.values():
               by_path[p.worktree] = p
 
-          try:
-            project = by_path[path]
-          except KeyError:
+          if os.path.exists(path):
             while path \
               and path != '/' \
               and path != self.manifest.topdir:
@@ -108,6 +90,11 @@ class Command(object):
                 break
               except KeyError:
                 path = os.path.dirname(path)
+          else:
+            try:
+              project = by_path[path]
+            except KeyError:
+              pass
 
         if not project:
           raise NoSuchProjectError(arg)

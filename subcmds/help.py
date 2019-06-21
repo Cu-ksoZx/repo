@@ -94,8 +94,6 @@ See 'repo help --all' for a complete list of recognized commands.
           body = getattr(cmd, bodyAttr)
         except AttributeError:
           return
-        if body == '' or body is None:
-          return
 
         self.nl()
 
@@ -165,7 +163,6 @@ See 'repo help --all' for a complete list of recognized commands.
         print >>sys.stderr, "repo: '%s' is not a repo command." % name
         sys.exit(1)
 
-      cmd.repodir = self.repodir
       self._PrintCommandHelp(cmd)
 
     else:
