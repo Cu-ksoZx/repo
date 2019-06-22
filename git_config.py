@@ -71,6 +71,14 @@ class GitConfig(object):
     else:
       self._pickle = pickleFile
 
+  def ClearCache(self):
+    if os.path.exists(self._pickle):
+      os.remove(self._pickle)
+    self._cache_dict = None
+    self._section_dict = None
+    self._remotes = {}
+    self._branches = {}
+
   def Has(self, name, include_defaults = True):
     """Return true if this configuration file has the key.
     """
@@ -254,9 +262,11 @@ class GitConfig(object):
       finally:
         fd.close()
     except IOError:
-      os.remove(self._pickle)
+      if os.path.exists(self._pickle):
+        os.remove(self._pickle)
     except cPickle.PickleError:
-      os.remove(self._pickle)
+      if os.path.exists(self._pickle):
+        os.remove(self._pickle)
 
   def _ReadGit(self):
     """
