@@ -27,7 +27,7 @@ from git_config import GitConfig, IsId
 from error import GitError, ImportError, UploadError
 from error import ManifestInvalidRevisionError
 
-from git_refs import GitRefs, HEAD, R_HEADS, R_TAGS, R_PUB
+from git_refs import GitRefs, HEAD, R_HEADS, R_TAGS, R_PUB, R_M
 
 def _lwrite(path, content):
   lock = '%s.lock' % path
@@ -598,7 +598,7 @@ class Project(object):
       return False
 
     if self.worktree:
-      self.manifest.SetMRefs(self)
+      self._InitMRef()
     else:
       self._InitMirrorHead()
       try:
@@ -1056,27 +1056,13 @@ class Project(object):
     if not os.path.exists(hooks):
       os.makedirs(hooks)
     for stock_hook in repo_hooks():
-      name = os.path.basename(stock_hook)
-
-      if name in ('commit-msg') and not self.remote.review:
-        # Don't install a Gerrit Code Review hook if this
-        # project does not appear to use it for reviews.
-        #
-        continue
-
-      dst = os.path.join(hooks, name)
-      if os.path.islink(dst):
-        continue
-      if os.path.exists(dst):
-        if filecmp.cmp(stock_hook, dst, shallow=False):
-          os.remove(dst)
-        else:
-          _error("%s: Not replacing %s hook", self.relpath, name)
-          continue
+      dst = os.path.join(hooks, os.path.basename(stock_hook))
       try:
         os.symlink(relpath(stock_hook, dst), dst)
       except OSError, e:
-        if e.errno == errno.EPERM:
+        if e.errno == errno.EEXIST:
+          pass
+        elif e.errno == errno.EPERM:
           raise GitError('filesystem must support symlinks')
         else:
           raise
@@ -1093,6 +1079,10 @@ class Project(object):
       else:
         remote.ResetFetch(mirror=True)
       remote.Save()
+
+  def _InitMRef(self):
+    if self.manifest.branch:
+      self._InitAnyMRef(R_M + self.manifest.branch)
 
   def _InitMirrorHead(self):
     self._InitAnyMRef(HEAD)
@@ -1112,37 +1102,30 @@ class Project(object):
         msg = 'manifest set to %s' % self.revisionExpr
         self.bare_git.symbolic_ref('-m', msg, ref, dst)
 
-  def _LinkWorkTree(self, relink=False):
-    dotgit = os.path.join(self.worktree, '.git')
-    if not relink:
-      os.makedirs(dotgit)
-
-    for name in ['config',
-                 'description',
-                 'hooks',
-                 'info',
-                 'logs',
-                 'objects',
-                 'packed-refs',
-                 'refs',
-                 'rr-cache',
-                 'svn']:
-      try:
-        src = os.path.join(self.gitdir, name)
-        dst = os.path.join(dotgit, name)
-        if relink:
-          os.remove(dst)
-        os.symlink(relpath(src, dst), dst)
-      except OSError, e:
-        if e.errno == errno.EPERM:
-          raise GitError('filesystem must support symlinks')
-        else:
-          raise
-
   def _InitWorkTree(self):
     dotgit = os.path.join(self.worktree, '.git')
     if not os.path.exists(dotgit):
-      self._LinkWorkTree()
+      os.makedirs(dotgit)
+
+      for name in ['config',
+                   'description',
+                   'hooks',
+                   'info',
+                   'logs',
+                   'objects',
+                   'packed-refs',
+                   'refs',
+                   'rr-cache',
+                   'svn']:
+        try:
+          src = os.path.join(self.gitdir, name)
+          dst = os.path.join(dotgit, name)
+          os.symlink(relpath(src, dst), dst)
+        except OSError, e:
+          if e.errno == errno.EPERM:
+            raise GitError('filesystem must support symlinks')
+          else:
+            raise
 
       _lwrite(os.path.join(dotgit, HEAD), '%s\n' % self.GetRevisionId())
 
@@ -1440,17 +1423,15 @@ class SyncBuffer(object):
 class MetaProject(Project):
   """A special project housed under .repo.
   """
-  def __init__(self, manifest, name, gitdir, worktree, relpath=None):
+  def __init__(self, manifest, name, gitdir, worktree):
     repodir = manifest.repodir
-    if relpath is None:
-      relpath = '.repo/%s' % name
     Project.__init__(self,
                      manifest = manifest,
                      name = name,
                      gitdir = gitdir,
                      worktree = worktree,
                      remote = RemoteSpec('origin'),
-                     relpath = relpath,
+                     relpath = '.repo/%s' % name,
                      revisionExpr = 'refs/heads/master',
                      revisionId = None)
 
@@ -1458,12 +1439,10 @@ class MetaProject(Project):
     if self.Exists:
       cb = self.CurrentBranch
       if cb:
-        cb = self.GetBranch(cb)
-        if cb.merge:
-          self.revisionExpr = cb.merge
+        base = self.GetBranch(cb).merge
+        if base:
+          self.revisionExpr = base
           self.revisionId = None
-        if cb.remote and cb.remote.name:
-          self.remote.name = cb.remote.name
 
   @property
   def LastFetch(self):
