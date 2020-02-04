@@ -19,8 +19,6 @@ import re
 import subprocess
 import sys
 import time
-import urllib2
-
 from signal import SIGTERM
 from urllib2 import urlopen, HTTPError
 from error import GitError, UploadError
@@ -72,14 +70,6 @@ class GitConfig(object):
         '.repopickle_' + os.path.basename(self.file))
     else:
       self._pickle = pickleFile
-
-  def ClearCache(self):
-    if os.path.exists(self._pickle):
-      os.remove(self._pickle)
-    self._cache_dict = None
-    self._section_dict = None
-    self._remotes = {}
-    self._branches = {}
 
   def Has(self, name, include_defaults = True):
     """Return true if this configuration file has the key.
@@ -264,11 +254,9 @@ class GitConfig(object):
       finally:
         fd.close()
     except IOError:
-      if os.path.exists(self._pickle):
-        os.remove(self._pickle)
+      os.remove(self._pickle)
     except cPickle.PickleError:
-      if os.path.exists(self._pickle):
-        os.remove(self._pickle)
+      os.remove(self._pickle)
 
   def _ReadGit(self):
     """
@@ -368,14 +356,10 @@ class RefSpec(object):
 _ssh_cache = {}
 _ssh_master = True
 
-def _open_ssh(host, port=None):
+def _open_ssh(host, port):
   global _ssh_master
 
-  if port is not None:
-    key = '%s:%s' % (host, port)
-  else:
-    key = host
-
+  key = '%s:%s' % (host, port)
   if key in _ssh_cache:
     return True
 
@@ -388,13 +372,10 @@ def _open_ssh(host, port=None):
 
   command = ['ssh',
              '-o','ControlPath %s' % _ssh_sock(),
+             '-p',str(port),
              '-M',
              '-N',
              host]
-
-  if port is not None:
-    command[3:3] = ['-p',str(port)]
-
   try:
     Trace(': %s', ' '.join(command))
     p = subprocess.Popen(command)
@@ -436,7 +417,7 @@ def _preconnect(url):
     if ':' in host:
       host, port = host.split(':')
     else:
-      port = None
+      port = 22
     if scheme in ('ssh', 'git+ssh', 'ssh+git'):
       return _open_ssh(host, port)
     return False
@@ -444,7 +425,7 @@ def _preconnect(url):
   m = URI_SCP.match(url)
   if m:
     host = m.group(1)
-    return _open_ssh(host)
+    return _open_ssh(host, 22)
 
   return False
 
@@ -511,25 +492,23 @@ class Remote(object):
         try:
           info = urlopen(u).read()
           if info == 'NOT_AVAILABLE':
-            raise UploadError('%s: SSH disabled' % self.review)
+            raise UploadError('Upload over ssh unavailable')
           if '<' in info:
             # Assume the server gave us some sort of HTML
             # response back, like maybe a login page.
             #
-            raise UploadError('%s: Cannot parse response' % u)
+            raise UploadError('Cannot read %s:\n%s' % (u, info))
 
           self._review_protocol = 'ssh'
           self._review_host = info.split(" ")[0]
           self._review_port = info.split(" ")[1]
-        except urllib2.URLError, e:
-          raise UploadError('%s: %s' % (self.review, e.reason[1]))
         except HTTPError, e:
           if e.code == 404:
             self._review_protocol = 'http-post'
             self._review_host = None
             self._review_port = None
           else:
-            raise UploadError('Upload over ssh unavailable')
+            raise UploadError('Cannot guess Gerrit version')
 
         REVIEW_CACHE[u] = (
           self._review_protocol,
