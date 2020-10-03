@@ -82,7 +82,7 @@ least one of these before using this command."""
       fd = None
 
       if re.compile("^.*[$ \t'].*$").match(editor):
-        args = [editor + ' "$@"', 'sh']
+        args = [editor + ' "$@"']
         shell = True
       else:
         args = [editor]

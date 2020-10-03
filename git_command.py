@@ -17,7 +17,6 @@ import os
 import sys
 import subprocess
 import tempfile
-from signal import SIGTERM
 from error import GitError
 from trace import REPO_TRACE, IsTrace, Trace
 
@@ -30,9 +29,8 @@ LAST_CWD = None
 
 _ssh_proxy_path = None
 _ssh_sock_path = None
-_ssh_clients = []
 
-def ssh_sock(create=True):
+def _ssh_sock(create=True):
   global _ssh_sock_path
   if _ssh_sock_path is None:
     if not create:
@@ -53,24 +51,6 @@ def _ssh_proxy():
       'git_ssh')
   return _ssh_proxy_path
 
-def _add_ssh_client(p):
-  _ssh_clients.append(p)
-
-def _remove_ssh_client(p):
-  try:
-    _ssh_clients.remove(p)
-  except ValueError:
-    pass
-
-def terminate_ssh_clients():
-  global _ssh_clients
-  for p in _ssh_clients:
-    try:
-      os.kill(p.pid, SIGTERM)
-      p.wait()
-    except OSError:
-      pass
-  _ssh_clients = []
 
 class _GitCall(object):
   def version(self):
@@ -139,7 +119,7 @@ class GitCommand(object):
     if disable_editor:
       env['GIT_EDITOR'] = ':'
     if ssh_proxy:
-      env['REPO_SSH_SOCK'] = ssh_sock()
+      env['REPO_SSH_SOCK'] = _ssh_sock()
       env['GIT_SSH'] = _ssh_proxy()
 
     if project:
@@ -208,9 +188,6 @@ class GitCommand(object):
     except Exception, e:
       raise GitError('%s: %s' % (command[1], e))
 
-    if ssh_proxy:
-      _add_ssh_client(p)
-
     self.process = p
     self.stdin = p.stdin
 
@@ -233,8 +210,4 @@ class GitCommand(object):
     else:
       p.stderr = None
 
-    try:
-      rc = p.wait()
-    finally:
-      _remove_ssh_client(p)
-    return rc
+    return self.process.wait()
