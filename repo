@@ -109,12 +109,17 @@ group = init_optparse.add_option_group('Manifest options')
 group.add_option('-u', '--manifest-url',
                  dest='manifest_url',
                  help='manifest repository location', metavar='URL')
+group.add_option('-o', '--origin',
+                 dest='manifest_origin',
+                 help="use REMOTE instead of 'origin' to track upstream",
+                 metavar='REMOTE')
 group.add_option('-b', '--manifest-branch',
                  dest='manifest_branch',
                  help='manifest branch or revision', metavar='REVISION')
 group.add_option('-m', '--manifest-name',
                  dest='manifest_name',
-                 help='initial manifest file', metavar='NAME.xml')
+                 help='initial manifest file (deprecated)',
+                 metavar='NAME.xml')
 group.add_option('--mirror',
                  dest='mirror', action='store_true',
                  help='mirror the forrest')
@@ -430,10 +435,14 @@ def _FindRepo():
   dir = os.getcwd()
   repo = None
 
-  while dir != '/' and not repo:
+  olddir = None
+  while dir != '/' \
+    and dir != olddir \
+    and not repo:
     repo = os.path.join(dir, repodir, REPO_MAIN)
     if not os.path.isfile(repo):
       repo = None
+      olddir = dir
       dir = os.path.dirname(dir)
   return (repo, os.path.join(dir, repodir))
 
