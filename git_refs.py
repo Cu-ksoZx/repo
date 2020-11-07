@@ -21,6 +21,7 @@ HEAD    = 'HEAD'
 R_HEADS = 'refs/heads/'
 R_TAGS  = 'refs/tags/'
 R_PUB   = 'refs/published/'
+R_M     = 'refs/remotes/m/'
 
 
 class GitRefs(object):
