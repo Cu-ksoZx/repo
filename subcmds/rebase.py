@@ -17,7 +17,7 @@ import sys
 
 from command import Command
 from git_command import GitCommand
-from git_refs import GitRefs, HEAD, R_HEADS, R_TAGS, R_PUB
+from git_refs import GitRefs, HEAD, R_HEADS, R_TAGS, R_PUB, R_M
 from error import GitError
 
 class Rebase(Command):
