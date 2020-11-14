@@ -23,8 +23,6 @@ try:
 except ImportError:
   import dummy_threading as _threading
 import time
-import urllib2
-
 from signal import SIGTERM
 from urllib2 import urlopen, HTTPError
 from error import GitError, UploadError
@@ -79,14 +77,6 @@ class GitConfig(object):
         '.repopickle_' + os.path.basename(self.file))
     else:
       self._pickle = pickleFile
-
-  def ClearCache(self):
-    if os.path.exists(self._pickle):
-      os.remove(self._pickle)
-    self._cache_dict = None
-    self._section_dict = None
-    self._remotes = {}
-    self._branches = {}
 
   def Has(self, name, include_defaults = True):
     """Return true if this configuration file has the key.
@@ -573,25 +563,23 @@ class Remote(object):
         try:
           info = urlopen(u).read()
           if info == 'NOT_AVAILABLE':
-            raise UploadError('%s: SSH disabled' % self.review)
+            raise UploadError('Upload over ssh unavailable')
           if '<' in info:
             # Assume the server gave us some sort of HTML
             # response back, like maybe a login page.
             #
-            raise UploadError('%s: Cannot parse response' % u)
+            raise UploadError('Cannot read %s:\n%s' % (u, info))
 
           self._review_protocol = 'ssh'
           self._review_host = info.split(" ")[0]
           self._review_port = info.split(" ")[1]
-        except urllib2.URLError, e:
-          raise UploadError('%s: %s' % (self.review, e.reason[1]))
         except HTTPError, e:
           if e.code == 404:
             self._review_protocol = 'http-post'
             self._review_host = None
             self._review_port = None
           else:
-            raise UploadError('Upload over ssh unavailable')
+            raise UploadError('Cannot guess Gerrit version')
 
         REVIEW_CACHE[u] = (
           self._review_protocol,
