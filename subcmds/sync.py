@@ -185,6 +185,8 @@ later is required to fix a server side protocol bug.
         t.join()
 
     pm.end()
+    for project in projects:
+      project.bare_git.gc('--auto')
     return fetched
 
   def UpdateProjectList(self):
@@ -334,7 +336,14 @@ uncommitted changes are present' % project.relpath
         # bail out now; the rest touches the working tree
         return
 
-        self.manifest._Unload()
+      if mp.HasChanges:
+        syncbuf = SyncBuffer(mp.config)
+        mp.Sync_LocalHalf(syncbuf)
+        if not syncbuf.Finish():
+          sys.exit(1)
+        _ReloadManifest(self)
+        mp = self.manifest.manifestProject
+
         all = self.GetProjects(args, missing_ok=True)
         missing = []
         for project in all:
@@ -361,10 +370,16 @@ uncommitted changes are present' % project.relpath
     if not syncbuf.Finish():
       sys.exit(1)
 
-    # If there's a notice that's supposed to print at the end of the sync, print
-    # it now...
-    if self.manifest.notice:
-      print self.manifest.notice
+def _ReloadManifest(cmd):
+  old = cmd.manifest
+  new = cmd.GetManifest(reparse=True)
+
+  if old.__class__ != new.__class__:
+    print >>sys.stderr, 'NOTICE: manifest format has changed  ***'
+    new.Upgrade_Local(old)
+  else:
+    if new.notice:
+      print new.notice
 
 def _PostRepoUpgrade(manifest):
   for project in manifest.projects.values():
